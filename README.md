@@ -2,6 +2,8 @@
 
 A real-time Streamlit application that analyzes facial emotions and body language patterns using computer vision and machine learning. Supports webcam, WiFi cameras, and phone cameras.
 
+![EmoScan Application](emo.png)
+
 ![EmoScan Demo](https://img.shields.io/badge/Status-Ready-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Latest-red)
