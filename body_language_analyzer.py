@@ -3,6 +3,7 @@ import numpy as np
 import mediapipe as mp
 import math
 import logging
+from weapon_detector import WeaponDetector
 
 class BodyLanguageAnalyzer:
     def __init__(self):
@@ -15,6 +16,9 @@ class BodyLanguageAnalyzer:
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
+        
+        # Initialize weapon detector
+        self.weapon_detector = WeaponDetector()
         
         # Define pose classifications
         self.posture_types = {
@@ -30,14 +34,14 @@ class BodyLanguageAnalyzer:
     
     def analyze_posture(self, frame, sensitivity=0.6):
         """
-        Analyze body language and posture from the frame
+        Analyze body language and posture from the frame, including weapon detection
         
         Args:
             frame: Input image frame
             sensitivity: Confidence threshold for pose detection
             
         Returns:
-            Dictionary containing posture analysis results
+            Dictionary containing posture analysis results and weapon detection
         """
         try:
             # Convert BGR to RGB for MediaPipe
@@ -46,14 +50,29 @@ class BodyLanguageAnalyzer:
             # Process the frame
             results = self.pose.process(rgb_frame)
             
+            # Perform weapon detection
+            weapon_results = self.weapon_detector.detect_weapons(frame)
+            
             if not results.pose_landmarks:
-                return None
+                # Return weapon detection results even if no pose detected
+                return {
+                    'body_detected': False,
+                    'weapon_detection': weapon_results,
+                    'alert_active': weapon_results['weapons_detected']
+                }
             
             # Extract landmark coordinates
             landmarks = self._extract_landmarks(results.pose_landmarks, frame.shape)
             
             if not landmarks:
-                return None
+                return {
+                    'body_detected': False,
+                    'weapon_detection': weapon_results,
+                    'alert_active': weapon_results['weapons_detected']
+                }
+            
+            # Check if weapons are in hand regions
+            weapon_in_hands = self._check_weapon_in_hands(weapon_results, landmarks, frame.shape)
             
             # Analyze posture
             posture_analysis = self._analyze_pose_geometry(landmarks)
@@ -63,7 +82,11 @@ class BodyLanguageAnalyzer:
             confidence = self._calculate_pose_confidence(results.pose_landmarks)
             
             if confidence < sensitivity:
-                return None
+                return {
+                    'body_detected': False,
+                    'weapon_detection': weapon_results,
+                    'alert_active': weapon_results['weapons_detected']
+                }
             
             return {
                 'posture_type': posture_type,
@@ -72,7 +95,11 @@ class BodyLanguageAnalyzer:
                 'pose_analysis': posture_analysis,
                 'keypoints_detected': len(landmarks),
                 'pose_landmarks': results.pose_landmarks,
-                'body_detected': True
+                'body_detected': True,
+                'weapon_detection': weapon_results,
+                'weapon_in_hands': weapon_in_hands,
+                'alert_active': weapon_results['weapons_detected'] or weapon_in_hands,
+                'processed_frame': weapon_results['processed_frame']
             }
             
         except Exception as e:
@@ -384,3 +411,76 @@ class BodyLanguageAnalyzer:
             'total_detections': total_detections,
             'most_frequent_posture': max(posture_counts.items(), key=lambda x: x[1])[0] if posture_counts else None
         }
+    
+    def _check_weapon_in_hands(self, weapon_results, landmarks, frame_shape):
+        """
+        Check if detected weapons are in hand regions
+        
+        Args:
+            weapon_results: Results from weapon detection
+            landmarks: Body pose landmarks
+            frame_shape: Shape of the frame (height, width, channels)
+            
+        Returns:
+            Boolean indicating if weapon is detected in hand region
+        """
+        if not weapon_results['weapons_detected'] or not landmarks:
+            return False
+        
+        height, width = frame_shape[:2]
+        weapon_in_hands = False
+        
+        # Define hand regions based on wrist landmarks
+        hand_regions = []
+        
+        # Left hand region
+        if 'left_wrist' in landmarks:
+            left_wrist = landmarks['left_wrist']
+            # Create bounding box around left hand (expanded region)
+            hand_size = 80  # Pixels around hand
+            left_hand_region = {
+                'x1': max(0, int(left_wrist['x'] * width) - hand_size),
+                'y1': max(0, int(left_wrist['y'] * height) - hand_size),
+                'x2': min(width, int(left_wrist['x'] * width) + hand_size),
+                'y2': min(height, int(left_wrist['y'] * height) + hand_size)
+            }
+            hand_regions.append(('left_hand', left_hand_region))
+        
+        # Right hand region
+        if 'right_wrist' in landmarks:
+            right_wrist = landmarks['right_wrist']
+            hand_size = 80
+            right_hand_region = {
+                'x1': max(0, int(right_wrist['x'] * width) - hand_size),
+                'y1': max(0, int(right_wrist['y'] * height) - hand_size),
+                'x2': min(width, int(right_wrist['x'] * width) + hand_size),
+                'y2': min(height, int(right_wrist['y'] * height) + hand_size)
+            }
+            hand_regions.append(('right_hand', right_hand_region))
+        
+        # Check if any weapon detection overlaps with hand regions
+        for detection in weapon_results['detections']:
+            weapon_bbox = detection['bbox']
+            weapon_center = detection['center']
+            
+            for hand_name, hand_region in hand_regions:
+                # Check if weapon center is within hand region
+                if (hand_region['x1'] <= weapon_center[0] <= hand_region['x2'] and
+                    hand_region['y1'] <= weapon_center[1] <= hand_region['y2']):
+                    weapon_in_hands = True
+                    
+                    # Update the detection result to indicate it's in hand
+                    detection['in_hand'] = hand_name
+                    detection['hand_region'] = hand_region
+                    
+                    # Draw hand region on processed frame for visualization
+                    cv2.rectangle(weapon_results['processed_frame'], 
+                                (hand_region['x1'], hand_region['y1']),
+                                (hand_region['x2'], hand_region['y2']),
+                                (255, 0, 255), 2)  # Magenta for hand region
+                    cv2.putText(weapon_results['processed_frame'], 
+                              f"WEAPON IN {hand_name.upper()}", 
+                              (hand_region['x1'], hand_region['y1'] - 10),
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+        
+        return weapon_in_hands

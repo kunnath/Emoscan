@@ -38,30 +38,43 @@ class CameraHandler:
     
     def _initialize_webcam(self, camera_index=0):
         """
-        Initialize local webcam
+        Initialize local webcam with improved error handling
         """
         try:
-            cap = cv2.VideoCapture(camera_index)
+            # Try different backends if default fails
+            backends = [cv2.CAP_ANY, cv2.CAP_DSHOW, cv2.CAP_V4L2]
             
-            if not cap.isOpened():
-                logging.error(f"Failed to open webcam {camera_index}")
-                return None
+            for backend in backends:
+                try:
+                    cap = cv2.VideoCapture(camera_index, backend)
+                    
+                    if not cap.isOpened():
+                        cap.release()
+                        continue
+                    
+                    # Set camera properties for better performance
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    cap.set(cv2.CAP_PROP_FPS, 30)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer size
+                    
+                    # Test if camera works with multiple attempts
+                    for test_attempt in range(3):
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            self.camera_type = "webcam"
+                            logging.info(f"Successfully initialized webcam {camera_index} with backend {backend}")
+                            return cap
+                        time.sleep(0.1)
+                    
+                    cap.release()
+                    
+                except Exception as e:
+                    logging.warning(f"Failed to initialize webcam with backend {backend}: {str(e)}")
+                    continue
             
-            # Set camera properties for better performance
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            cap.set(cv2.CAP_PROP_FPS, 30)
-            
-            # Test if camera works
-            ret, frame = cap.read()
-            if not ret:
-                logging.error("Failed to read from webcam")
-                cap.release()
-                return None
-            
-            self.camera_type = "webcam"
-            logging.info(f"Successfully initialized webcam {camera_index}")
-            return cap
+            logging.error(f"Failed to open webcam {camera_index} with any backend")
+            return None
             
         except Exception as e:
             logging.error(f"Error initializing webcam: {str(e)}")
@@ -69,7 +82,7 @@ class CameraHandler:
     
     def _initialize_ip_camera(self, url):
         """
-        Initialize IP/WiFi camera
+        Initialize IP/WiFi camera with improved reliability
         """
         try:
             # Add timeout and buffer settings for IP cameras
@@ -83,20 +96,43 @@ class CameraHandler:
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer to minimize delay
             cap.set(cv2.CAP_PROP_FPS, 15)  # Lower FPS for network cameras
             
-            # Test connection with timeout
+            # For IP cameras, try to set additional properties that might help
+            try:
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
+            except:
+                pass  # Ignore if not supported
+            
+            # Test connection with multiple attempts and longer timeout
             start_time = time.time()
-            timeout = 10  # 10 seconds timeout
+            timeout = 15  # 15 seconds timeout
+            successful_reads = 0
+            required_reads = 3  # Require multiple successful reads
             
-            while time.time() - start_time < timeout:
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    self.camera_type = "ip_camera"
-                    logging.info(f"Successfully connected to IP camera: {url}")
-                    return cap
-                time.sleep(0.1)
+            while time.time() - start_time < timeout and successful_reads < required_reads:
+                try:
+                    ret, frame = cap.read()
+                    if ret and frame is not None and frame.size > 0:
+                        successful_reads += 1
+                        if successful_reads >= required_reads:
+                            self.camera_type = "ip_camera"
+                            logging.info(f"Successfully connected to IP camera: {url}")
+                            return cap
+                    else:
+                        # Clear buffer if read fails
+                        for _ in range(5):
+                            cap.read()
+                    
+                    time.sleep(0.2)
+                except Exception as read_error:
+                    logging.warning(f"IP camera read attempt failed: {str(read_error)}")
+                    time.sleep(0.5)
             
-            logging.error(f"Timeout connecting to IP camera: {url}")
+            logging.error(f"Timeout or insufficient successful reads for IP camera: {url}")
             cap.release()
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error connecting to IP camera {url}: {str(e)}")
             return None
             
         except Exception as e:
@@ -195,7 +231,7 @@ class CameraHandler:
             logging.error(f"Error optimizing camera settings: {str(e)}")
             return False
     
-    def capture_frame_with_retry(self, cap, max_retries=3):
+    def capture_frame_with_retry(self, cap, max_retries=5):
         """
         Capture frame with retry mechanism for unreliable connections
         
@@ -216,16 +252,69 @@ class CameraHandler:
                 if ret and frame is not None and frame.size > 0:
                     return True, frame
                 
-                # If first attempt fails, try to reconnect for IP cameras
+                # If first attempt fails, try to flush buffer for IP cameras
                 if attempt == 0 and self.camera_type == "ip_camera":
+                    # Try to read and discard a few frames to clear buffer
+                    for _ in range(3):
+                        cap.read()
                     time.sleep(0.1)  # Brief pause before retry
                     
             except Exception as e:
                 logging.warning(f"Frame capture attempt {attempt + 1} failed: {str(e)}")
                 if attempt < max_retries - 1:
-                    time.sleep(0.1)
+                    time.sleep(0.2 * (attempt + 1))  # Increasing delay between retries
         
         return False, None
+    
+    def is_camera_healthy(self, cap):
+        """
+        Check if camera connection is healthy
+        
+        Args:
+            cap: OpenCV VideoCapture object
+            
+        Returns:
+            Boolean indicating camera health
+        """
+        if cap is None:
+            return False
+        
+        try:
+            return cap.isOpened()
+        except Exception:
+            return False
+    
+    def reconnect_camera(self, camera_source, max_attempts=3):
+        """
+        Attempt to reconnect to camera with multiple tries
+        
+        Args:
+            camera_source: Camera source to reconnect to
+            max_attempts: Maximum reconnection attempts
+            
+        Returns:
+            OpenCV VideoCapture object or None if failed
+        """
+        for attempt in range(max_attempts):
+            try:
+                logging.info(f"Reconnection attempt {attempt + 1}/{max_attempts}")
+                
+                # Wait progressively longer between attempts
+                if attempt > 0:
+                    wait_time = attempt * 2
+                    logging.info(f"Waiting {wait_time} seconds before retry...")
+                    time.sleep(wait_time)
+                
+                cap = self.initialize_camera(camera_source)
+                if cap is not None:
+                    logging.info(f"Successfully reconnected on attempt {attempt + 1}")
+                    return cap
+                    
+            except Exception as e:
+                logging.error(f"Reconnection attempt {attempt + 1} failed: {str(e)}")
+        
+        logging.error(f"Failed to reconnect after {max_attempts} attempts")
+        return None
     
     def preprocess_frame(self, frame):
         """
