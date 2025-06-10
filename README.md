@@ -7,15 +7,32 @@ A real-time Streamlit application that analyzes facial emotions and body languag
 ![EmoScan Demo](https://img.shields.io/badge/Status-Ready-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Latest-red)
+![Camera](https://img.shields.io/badge/Camera-Enhanced-green)
+
+## 🆕 Latest Updates (June 2025)
+
+### Camera Robustness Enhancement
+We've significantly improved camera reliability and user experience:
+
+- **🔄 Automatic Reconnection**: Camera automatically reconnects on failures
+- **📊 Real-time Health Monitoring**: Live connection status indicators
+- **🛡️ Persistent Recording**: Camera only stops when you command it to stop
+- **🔧 Enhanced Error Recovery**: Smart retry mechanisms with progressive backoff
+- **📈 Performance Boost**: Improved frame processing for better responsiveness
+- **🎛️ Better Controls**: New restart and test connection features
+- **💡 Smart Diagnostics**: Detailed error messages with recovery suggestions
 
 ## 🚀 Features
 
 - **Real-time Emotion Detection**: Analyze facial expressions using DeepFace
 - **Body Language Analysis**: Track posture and gestures using MediaPipe
 - **Multi-Camera Support**: Webcam, WiFi/IP cameras, and smartphone cameras
+- **Enhanced Camera Robustness**: Automatic reconnection and error recovery
 - **Live Visualizations**: Real-time charts and statistics
 - **Data Export**: Save analysis results to CSV
 - **Comprehensive Dashboard**: Combined emotion and posture insights
+- **Camera Health Monitoring**: Real-time connection status and diagnostics
+- **Persistent Recording**: Camera continues until explicitly stopped by user
 
 ## 📋 Requirements
 
@@ -124,6 +141,7 @@ The application will open in your web browser at `http://localhost:8501`
 #### Webcam
 1. Select "Webcam" in the sidebar
 2. Click "Start Analysis"
+3. **New**: Camera will continue running until you click "Stop Analysis"
 
 #### WiFi/IP Camera
 1. Select "WiFi Camera (IP)" in the sidebar
@@ -131,6 +149,7 @@ The application will open in your web browser at `http://localhost:8501`
 3. Common formats:
    - `http://192.168.1.100:8080/video`
    - `rtsp://192.168.1.100:554/stream`
+4. **New**: Automatic reconnection on connection failures
 
 #### Phone Camera
 1. Install IP Webcam app on your phone:
@@ -140,6 +159,26 @@ The application will open in your web browser at `http://localhost:8501`
 2. Connect phone to same WiFi network
 3. Start the camera server in the app
 4. Select "Phone Camera" and enter the displayed URL
+
+### Enhanced Camera Controls (New!)
+
+#### Camera Status Monitoring
+- **Real-time Status**: Live connection health indicator (Good/Fair/Poor)
+- **Frame Counter**: Track processed frames in real-time
+- **Connection Test**: Quick camera connection verification
+- **Auto-Recovery**: Automatic reconnection on failures
+
+#### Control Buttons
+- **Start Analysis**: Begin camera recording and analysis
+- **Stop Analysis**: Manually stop camera (disabled during recording for safety)
+- **Restart Camera**: Quick camera restart without losing settings
+- **Test Connection**: Verify camera connectivity before starting
+
+#### Robust Error Handling
+- **Automatic Reconnection**: Up to 5 reconnection attempts with progressive delays
+- **Persistent Recording**: Camera won't stop unexpectedly - only when user commands
+- **Error Recovery**: Detailed error messages with recovery suggestions
+- **Connection Health**: Real-time monitoring of camera connection quality
 
 ### Configuration Options
 
@@ -154,6 +193,9 @@ The app automatically optimizes camera settings for:
 - Resolution (640x480 for performance)
 - Frame rate (30 FPS for local, 15 FPS for network cameras)
 - Image enhancement for better detection
+- **New**: Multiple backend support for better compatibility
+- **New**: Advanced buffer management for network cameras
+- **New**: Persistent connection monitoring and auto-recovery
 
 ## 📊 Features Overview
 
@@ -206,10 +248,12 @@ app.py                 # Main Streamlit application
 ```
 
 ### Performance Optimization
-- Frame processing every 3rd frame for real-time performance
+- **Enhanced**: Frame processing every 2nd frame for improved real-time performance
 - Automatic resolution adjustment for network cameras
-- Buffering and retry mechanisms for unstable connections
+- **New**: Advanced buffering and retry mechanisms for unstable connections
+- **New**: Multiple reconnection attempts with smart backoff
 - Efficient data structures for historical analysis
+- **New**: Camera health monitoring and automatic recovery
 
 ## 🔧 Troubleshooting
 
@@ -220,6 +264,28 @@ app.py                 # Main Streamlit application
 # Check available cameras
 python -c "import cv2; print([i for i in range(10) if cv2.VideoCapture(i).read()[0]])"
 ```
+
+**New Camera Robustness Features:**
+- **Automatic Recovery**: Camera will attempt to reconnect automatically
+- **Health Monitoring**: Check camera status in sidebar
+- **Test Connection**: Use "Test Camera Connection" button before starting
+- **Restart Camera**: Use "Restart Camera" button if issues persist
+- **Multiple Backends**: App tries different camera backends automatically
+
+#### Camera Stops Unexpectedly (Fixed!)
+**Previous Issue**: Camera would stop due to connection failures or errors
+**Solution Implemented**:
+- Enhanced error handling with automatic reconnection
+- Persistent recording state that won't stop unexpectedly
+- Multiple retry mechanisms for failed reads
+- Progressive backoff for reconnection attempts
+- Real-time connection health monitoring
+
+**If camera still stops**:
+1. Check the camera health indicator in sidebar
+2. Use "Test Camera Connection" to verify setup
+3. Click "Restart Camera" to force reconnection
+4. Check error messages for specific recovery suggestions
 
 #### Permission Issues (macOS)
 - Go to System Preferences → Security & Privacy → Camera
@@ -330,15 +396,64 @@ For issues and questions:
 2. Search existing [GitHub Issues](issues)
 3. Create a new issue with detailed description
 
+## 📝 Changelog
+
+### Version 2.1.0 (June 10, 2025) - Camera Robustness Update
+#### 🚀 New Features
+- **Enhanced Camera Reliability**: Implemented robust camera connection management
+- **Automatic Reconnection**: Camera automatically reconnects on connection failures (up to 5 attempts)
+- **Real-time Health Monitoring**: Live camera connection status indicators (Good/Fair/Poor)
+- **Persistent Recording**: Camera continues recording until explicitly stopped by user
+- **Smart Error Recovery**: Progressive backoff and intelligent retry mechanisms
+
+#### 🔧 Improvements
+- **Performance Boost**: Reduced frame processing interval for better responsiveness
+- **Better UI Controls**: Added "Restart Camera" and "Test Connection" buttons
+- **Enhanced Error Messages**: Detailed error descriptions with recovery suggestions
+- **Session State Management**: Improved handling of Streamlit session state
+- **Multiple Backend Support**: Automatic fallback to different camera backends
+
+#### 🛠️ Technical Enhancements
+- Increased maximum consecutive failures threshold (10 → 15)
+- Added camera health tracking and metrics
+- Implemented multiple reconnection attempts with smart delays
+- Enhanced IP camera initialization with multiple successful read requirements
+- Added buffer management for network cameras
+- Improved webcam initialization with backend fallback
+
+#### 🐛 Bug Fixes
+- Fixed camera stopping unexpectedly without user command
+- Resolved session state corruption issues
+- Fixed IP camera connection timeout problems
+- Improved handling of frame processing errors
+
+### Version 2.0.0 (Previous Release)
+- Initial release with emotion and body language analysis
+- Multi-camera support (webcam, IP cameras, phone cameras)
+- Real-time visualizations and data export
+- Comprehensive analysis dashboard
+
 ## 🔮 Roadmap
 
+### ✅ Recently Completed
+- [x] Enhanced camera robustness and automatic reconnection
+- [x] Real-time camera health monitoring
+- [x] Persistent recording state management
+- [x] Advanced error recovery mechanisms
+- [x] Improved user interface controls
+
+### 🚧 In Progress
 - [ ] Multiple person detection
 - [ ] Voice emotion analysis
+
+### 📋 Planned Features
 - [ ] Cloud deployment options
 - [ ] Mobile app version
 - [ ] Integration with fitness trackers
 - [ ] Advanced gesture recognition
 - [ ] Real-time alerts and notifications
+- [ ] Weapon detection and security features
+- [ ] Enhanced data visualization dashboards
 
 ---
 
